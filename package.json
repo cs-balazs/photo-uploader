@@ -22,7 +22,6 @@
   },
   "devDependencies": {
     "@types/multer": "^1.4.7",
-    "@types/multiparty": "^0.0.33",
     "@types/node": "16.11.9",
     "@types/react": "17.0.36",
     "eslint": "7.32.0",

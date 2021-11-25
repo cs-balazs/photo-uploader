@@ -16,7 +16,7 @@ const client = create({
 const SSE_HEADERS = {
   "Content-Type": "text/event-stream",
   Connection: "keep-alive",
-  "Cache-Control": "no-cache",
+  "Cache-Control": "no-cache, no-transform",
 };
 
 type MulterFile = {
@@ -75,8 +75,6 @@ handler.get((req: NextRequestWithFiles, res: NextApiResponse) => {
   console.log("Client connected to SSE, id:", id);
 
   res.writeHead(200, SSE_HEADERS);
-  res.shouldKeepAlive = true;
-  setInterval(() => res.write(`data: test\n\n`), 2000);
 
   emitter.on(`progress-${id}`, (index, progress) => {
     res.write(`data: ${index} - ${progress}%\n\n`);
