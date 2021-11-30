@@ -1,32 +1,38 @@
-import { FormControl } from "@chakra-ui/form-control";
-import { AspectRatio, Box, Center, Text } from "@chakra-ui/layout";
+import { Grid } from "@chakra-ui/layout";
 import type { NextPage } from "next";
-import { useEffect } from "react";
-import useIPFSDropzone from "../hooks/useIPFSDropzone";
+import Dropzone from "../components/Dropzone";
+import UploadedImage from "../components/UploadedImage";
+import useDropzone from "../hooks/useDropzone";
 
 const Home: NextPage = () => {
-  const { getRootProps, getInputProps, isDragActive, previews, acceptedFiles } =
-    useIPFSDropzone();
-
-  useEffect(() => console.log(previews), [previews]);
+  const {
+    getRootProps,
+    getInputProps,
+    isDragActive,
+    previews,
+    progresses,
+    hashes,
+  } = useDropzone();
 
   return (
-    <Box {...getRootProps()}>
-      <FormControl>
-        <input id="dropzone" {...getInputProps()} hidden />
-        <AspectRatio maxWidth={400} ratio={1}>
-          <Center as="label" htmlFor="dropzone" backgroundColor="gray.300">
-            <Text>
-              {isDragActive ? (
-                <Text>Drop the files here ...</Text>
-              ) : (
-                <Text>Drag and drop some files here</Text>
-              )}
-            </Text>
-          </Center>
-        </AspectRatio>
-      </FormControl>
-    </Box>
+    <Grid templateColumns="1fr 2fr" h="100vh" w="100vw">
+      <Dropzone
+        dropzoneProps={getRootProps()}
+        inputProps={getInputProps()}
+        isDragActive={isDragActive}
+      />
+
+      <Grid alignItems="center" templateColumns="repeat(4, 1fr)">
+        {previews.map((preview, index) => (
+          <UploadedImage
+            key={preview}
+            preview={preview}
+            progress={progresses[index]}
+            hash={hashes[index]}
+          />
+        ))}
+      </Grid>
+    </Grid>
   );
 };
 

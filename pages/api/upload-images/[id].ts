@@ -38,11 +38,7 @@ const uploadImage = (
   client
     .add(buffer, {
       progress: (bytes) =>
-        emitter.emit(
-          `progress-${id}`,
-          index,
-          Math.floor((bytes / buffer.byteLength) * 100)
-        ),
+        emitter.emit(`progress-${id}`, index, bytes / buffer.byteLength),
     })
     .then((added) => added.path);
 
@@ -72,13 +68,10 @@ handler.post(async (req: NextRequestWithFiles, res: NextApiResponse) => {
 
 handler.get((req: NextRequestWithFiles, res: NextApiResponse) => {
   const { id } = req.query;
-  console.log("Client connected to SSE, id:", id);
-
   res.writeHead(200, SSE_HEADERS);
-
-  emitter.on(`progress-${id}`, (index, progress) => {
-    res.write(`data: ${index} - ${progress}%\n\n`);
-  });
+  emitter.on(`progress-${id}`, (index, progress) =>
+    res.write(`data: ${JSON.stringify([index, progress])}\n\n`)
+  );
 });
 
 // TODO: This is just for testing SSE and EventEmitter

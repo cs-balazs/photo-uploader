@@ -36,15 +36,11 @@ const uploadImages = async (files: File[], id: number) => {
   });
   const body = await response.json();
 
-  if (response.ok) {
-    console.log("Files uploaded", body);
-    return body;
-  } else throw Error(body.message ?? "Failed to upload images");
+  if (response.ok) return body;
+  else throw Error(body.message ?? "Failed to upload images");
 };
 
-const useIPFSDropzone = ({
-  acceptedFilesCallback,
-  rejectedFilesCallback,
+const useDropzone = ({
   shouldShowErrorToasts = true,
   maxFileSizeMb = 10,
 }: Props = {}) => {
@@ -54,20 +50,26 @@ const useIPFSDropzone = ({
   const [progressEventSource, setProgressEventSource] =
     useState<EventSource | null>(null);
   const uploadProgressId = useRef<number>(+Date.now());
+  const [progresses, setProgresses] = useState<number[]>([]);
 
   useEffect(() => {
     setProgressEventSource(() => {
       const source = new EventSource(
         `/api/upload-images/${uploadProgressId.current}`
       );
-      source.addEventListener("message", function (e) {
-        console.log(e.data);
+      source.addEventListener("message", (event) => {
+        const [index, progress] = JSON.parse(event.data);
+        setProgresses((prev) => {
+          const newProgresses = [...prev];
+          newProgresses[index] = progress;
+          return newProgresses;
+        });
       });
       return source;
     });
   }, []);
 
-  // useEffect(() => () => uploadProgressSource?.close(), [uploadProgressSource]);
+  useEffect(() => () => progressEventSource?.close(), [progressEventSource]);
 
   const showErrorToasts = useCallback(
     (fileRejections: FileRejection[]) => {
@@ -87,11 +89,12 @@ const useIPFSDropzone = ({
   );
 
   const dropzone = useReactDropzone({
-    onDrop: async (acceptedFiles, fileRejections) => {
+    onDrop: (acceptedFiles, fileRejections) => {
+      setProgresses(acceptedFiles.map(() => 0));
       setPreviews(acceptedFiles.map(URL.createObjectURL));
       showErrorToasts(fileRejections);
 
-      await uploadImages(acceptedFiles, uploadProgressId.current)
+      uploadImages(acceptedFiles, uploadProgressId.current)
         .then(setHashes)
         .catch((error) =>
           toast({
@@ -100,16 +103,13 @@ const useIPFSDropzone = ({
             description: error.message,
           })
         );
-
-      // acceptedFilesCallback?.(acceptedFiles);
-      // rejectedFilesCallback?.(fileRejections);
     },
     accept: "image/*",
     noClick: true,
     maxSize: maxFileSizeMb * 1024 * 1024,
   });
 
-  return { ...dropzone, previews, hashes };
+  return { ...dropzone, previews, hashes, progresses };
 };
 
-export default useIPFSDropzone;
+export default useDropzone;
