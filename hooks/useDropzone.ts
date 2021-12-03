@@ -6,9 +6,15 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 type Props = {
-  maxFileSizeMb?: number;
+  maxSizeMb?: number;
   onUploadError?: (error?: Error) => void;
 } & DropzoneOptions;
+
+interface UploadedFile extends File {
+  progress: number;
+  preview: string;
+  hash?: string;
+}
 
 const uploadImages = async (
   files: File[],
@@ -28,31 +34,23 @@ const uploadImages = async (
   else throw Error(body.message ?? "Failed to upload images");
 };
 
-interface UploadedFile extends File {
-  progress: number;
-  preview: string;
-  hash?: string;
-}
-
 const useDropzone = (
-  {
-    onUploadError = () => {},
-    maxFileSizeMb = 10,
-    ...dropzoneOptions
-  }: Props = {
+  { onUploadError = () => {}, maxSizeMb = 10, ...dropzoneOptions }: Props = {
     accept: "image/*",
     noClick: true,
   }
 ) => {
-  const [progressEventSource, setProgressEventSource] =
-    useState<EventSource | null>(null);
+  const progressEventSource = useRef<EventSource | null>(null);
   const uploadProgressId = useRef<string>(uuidv4());
 
   const [uploadedFiles, setUploadedFiles] = useState<
     Record<string, UploadedFile>
   >({});
 
-  useEffect(() => () => progressEventSource?.close(), [progressEventSource]);
+  useEffect(
+    () => () => progressEventSource.current?.close(),
+    [progressEventSource]
+  );
 
   const dropzone = useReactDropzone({
     ...dropzoneOptions,
@@ -91,27 +89,25 @@ const useDropzone = (
 
       dropzoneOptions.onDrop?.(acceptedFiles, fileRejections, event);
     },
-    maxSize: maxFileSizeMb * 1024 * 1024,
+    maxSize: dropzoneOptions.maxSize ?? maxSizeMb * 1024 * 1024,
   });
 
   useEffect(() => {
-    setProgressEventSource(() => {
-      const source = new EventSource(
-        `/api/upload-images/${uploadProgressId.current}`
-      );
-      source.addEventListener("message", (event) => {
-        const [id, progress] = JSON.parse(event.data);
+    const source = new EventSource(
+      `/api/upload-images/${uploadProgressId.current}`
+    );
+    source.addEventListener("message", (event) => {
+      const [id, progress] = JSON.parse(event.data);
 
-        setUploadedFiles((prev) => ({
-          ...prev,
-          [id]: {
-            ...prev[id],
-            progress,
-          },
-        }));
-      });
-      return source;
+      setUploadedFiles((prev) => ({
+        ...prev,
+        [id]: {
+          ...prev[id],
+          progress,
+        },
+      }));
     });
+    progressEventSource.current = source;
   }, []);
 
   return { ...dropzone, uploadedFiles };
