@@ -63,13 +63,7 @@ handler.post(async (req: NextRequestWithFiles, res: NextApiResponse) => {
     return;
   }
 
-  res
-    .status(200)
-    .json(
-      Object.fromEntries(
-        req.files.map(({ fieldname }, index) => [fieldname, hashes[index]])
-      )
-    );
+  res.status(200).json(hashes);
 });
 
 handler.get((req: NextRequestWithFiles, res: NextApiResponse) => {

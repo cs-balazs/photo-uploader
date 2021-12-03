@@ -3,7 +3,6 @@ import {
   DropzoneOptions,
   useDropzone as useReactDropzone,
 } from "react-dropzone";
-import { v4 as uuidv4 } from "uuid";
 
 type Props = {
   maxSizeMb?: number;
@@ -18,11 +17,10 @@ interface UploadedFile extends File {
 
 const uploadImages = async (
   files: File[],
-  fileIds: string[],
-  clientId: string
-): Promise<Record<string, string>> => {
+  clientId: number
+): Promise<string[]> => {
   const formData = new FormData();
-  files.forEach((file, index) => formData.append(fileIds[index], file));
+  files.forEach((file, index) => formData.append(index.toString(), file));
 
   const response = await fetch(`/api/upload-images/${clientId}`, {
     method: "POST",
@@ -34,18 +32,17 @@ const uploadImages = async (
   else throw Error(body.message ?? "Failed to upload images");
 };
 
-const useDropzone = (
-  { onUploadError = () => {}, maxSizeMb = 10, ...dropzoneOptions }: Props = {
-    accept: "image/*",
-    noClick: true,
-  }
-) => {
+const useDropzone = ({
+  onUploadError = () => {},
+  maxSizeMb = 10,
+  ...dropzoneOptions
+}: Props = {}) => {
+  // Needed to handle SSE
   const progressEventSource = useRef<EventSource | null>(null);
-  const uploadProgressId = useRef<string>(uuidv4());
+  const uploadProgressId = useRef<number>(+Date.now());
 
-  const [uploadedFiles, setUploadedFiles] = useState<
-    Record<string, UploadedFile>
-  >({});
+  // To store the file objects with the extra 'progress', 'preview' and 'hash' properties
+  const [acceptedFiles, setAcceptedFiles] = useState<UploadedFile[]>([]);
 
   useEffect(
     () => () => progressEventSource.current?.close(),
@@ -54,33 +51,24 @@ const useDropzone = (
 
   const dropzone = useReactDropzone({
     ...dropzoneOptions,
+    accept: dropzoneOptions.accept ?? "image/*",
+    noClick: dropzoneOptions.noClick ?? true,
+    maxSize: dropzoneOptions.maxSize ?? maxSizeMb * 1024 * 1024,
     onDrop: (acceptedFiles, fileRejections, event) => {
-      const newUploadedFiles = Object.fromEntries(
-        acceptedFiles.map((file) => [
-          uuidv4(),
-          {
-            ...file,
-            progress: 0,
-            preview: URL.createObjectURL(file),
-          },
-        ])
-      );
-
-      setUploadedFiles((prev) => ({
-        ...prev,
-        ...newUploadedFiles,
+      const newUploadedFiles = acceptedFiles.map((file) => ({
+        ...file,
+        progress: 0,
+        preview: URL.createObjectURL(file),
       }));
 
-      uploadImages(
-        acceptedFiles,
-        Object.keys(newUploadedFiles),
-        uploadProgressId.current
-      )
+      setAcceptedFiles((prev) => [...prev, ...newUploadedFiles]);
+
+      uploadImages(acceptedFiles, uploadProgressId.current)
         .then((hashes) =>
-          setUploadedFiles((prev) => {
-            const newUploadedFiles = { ...prev };
-            Object.entries(hashes).forEach(
-              ([id, hash]) => (newUploadedFiles[id].hash = hash)
+          setAcceptedFiles((prev) => {
+            const newUploadedFiles = [...prev];
+            hashes.forEach(
+              (hash, index) => (newUploadedFiles[index].hash = hash)
             );
             return newUploadedFiles;
           })
@@ -89,28 +77,26 @@ const useDropzone = (
 
       dropzoneOptions.onDrop?.(acceptedFiles, fileRejections, event);
     },
-    maxSize: dropzoneOptions.maxSize ?? maxSizeMb * 1024 * 1024,
   });
 
   useEffect(() => {
+    console.log(dropzoneOptions);
     const source = new EventSource(
       `/api/upload-images/${uploadProgressId.current}`
     );
     source.addEventListener("message", (event) => {
-      const [id, progress] = JSON.parse(event.data);
+      const [index, progress] = JSON.parse(event.data);
 
-      setUploadedFiles((prev) => ({
-        ...prev,
-        [id]: {
-          ...prev[id],
-          progress,
-        },
-      }));
+      setAcceptedFiles((prev) => {
+        const newAcceptedFiles = [...prev];
+        newAcceptedFiles[index].progress = progress;
+        return newAcceptedFiles;
+      });
     });
     progressEventSource.current = source;
   }, []);
 
-  return { ...dropzone, uploadedFiles };
+  return { ...dropzone, acceptedFiles };
 };
 
 export default useDropzone;

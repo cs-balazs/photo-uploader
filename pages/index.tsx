@@ -8,7 +8,7 @@ import useDropzone from "../hooks/useDropzone";
 const Home: NextPage = () => {
   const toast = useToast();
 
-  const { getRootProps, getInputProps, isDragActive, uploadedFiles } =
+  const { getRootProps, getInputProps, isDragActive, acceptedFiles } =
     useDropzone({
       onDrop: (_, fileRejections) =>
         fileRejections.forEach((file) =>
@@ -29,7 +29,7 @@ const Home: NextPage = () => {
       />
 
       <Grid alignItems="center" templateColumns="repeat(4, 1fr)">
-        {Object.entries(uploadedFiles).map(([id, file]) => (
+        {Object.entries(acceptedFiles).map(([id, file]) => (
           <UploadedImage
             key={id}
             preview={file.preview}
