@@ -44,11 +44,7 @@ const useDropzone = ({
   // To store the file objects with the extra 'progress', 'preview' and 'hash' properties
   const [acceptedFiles, setAcceptedFiles] = useState<UploadedFile[]>([]);
 
-  useEffect(
-    () => () => progressEventSource.current?.close(),
-    [progressEventSource]
-  );
-
+  // Start uploading files on drop event. After the POST request, the backend will start sending SSE messages
   const dropzone = useReactDropzone({
     ...dropzoneOptions,
     accept: dropzoneOptions.accept ?? "image/*",
@@ -63,29 +59,23 @@ const useDropzone = ({
 
       setAcceptedFiles((prev) => [...prev, ...newUploadedFiles]);
 
-      uploadImages(acceptedFiles, uploadProgressId.current)
-        .then((hashes) =>
-          setAcceptedFiles((prev) => {
-            const newUploadedFiles = [...prev];
-            hashes.forEach(
-              (hash, index) => (newUploadedFiles[index].hash = hash)
-            );
-            return newUploadedFiles;
-          })
-        )
-        .catch(onUploadError);
+      uploadImages(acceptedFiles, uploadProgressId.current).catch(
+        onUploadError
+      );
 
       dropzoneOptions.onDrop?.(acceptedFiles, fileRejections, event);
     },
   });
 
+  // Set up SSE client on mount
   useEffect(() => {
-    console.log(dropzoneOptions);
     const source = new EventSource(
       `/api/upload-images/${uploadProgressId.current}`
     );
-    source.addEventListener("message", (event) => {
-      const [index, progress] = JSON.parse(event.data);
+    source.addEventListener("progress", (event) => {
+      const [index, progress] = JSON.parse(
+        (event as Event & { data: string }).data
+      );
 
       setAcceptedFiles((prev) => {
         const newAcceptedFiles = [...prev];
@@ -93,8 +83,27 @@ const useDropzone = ({
         return newAcceptedFiles;
       });
     });
+
+    source.addEventListener("hash", (event) => {
+      const [index, hash] = JSON.parse(
+        (event as Event & { data: string }).data
+      );
+
+      setAcceptedFiles((prev) => {
+        const newAcceptedFiles = [...prev];
+        newAcceptedFiles[index].hash = hash;
+        return newAcceptedFiles;
+      });
+    });
+
     progressEventSource.current = source;
   }, []);
+
+  // Disconnect SSE on unmount
+  useEffect(
+    () => () => progressEventSource.current?.close(),
+    [progressEventSource]
+  );
 
   return { ...dropzone, acceptedFiles };
 };

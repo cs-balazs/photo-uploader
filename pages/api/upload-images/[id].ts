@@ -54,7 +54,10 @@ handler.post(async (req: NextRequestWithFiles, res: NextApiResponse) => {
 
   const hashes = await Promise.all(
     req.files.map(({ buffer, fieldname }) =>
-      uploadImage(id as string, fieldname, buffer)
+      uploadImage(id as string, fieldname, buffer).then((hash) => {
+        emitter.emit(`hash-${id}`, fieldname, hash);
+        return hash;
+      })
     )
   ).catch(() => undefined);
 
@@ -70,15 +73,11 @@ handler.get((req: NextRequestWithFiles, res: NextApiResponse) => {
   const { id } = req.query;
   res.writeHead(200, SSE_HEADERS);
   emitter.on(`progress-${id}`, (index, progress) =>
-    res.write(`data: ${JSON.stringify([index, progress])}\n\n`)
+    res.write(`event: progress\ndata: ${JSON.stringify([index, progress])}\n\n`)
   );
-});
-
-// TODO: This is just for testing SSE and EventEmitter
-handler.put(async (req: NextRequestWithFiles, res: NextApiResponse) => {
-  const { id } = req.query;
-  emitter.emit(`progress-${id}`, "test", "test");
-  res.status(200).send("Test event emitted");
+  emitter.on(`hash-${id}`, (index, hash) =>
+    res.write(`event: hash\ndata: ${JSON.stringify([index, hash])}\n\n`)
+  );
 });
 
 export const config = {
