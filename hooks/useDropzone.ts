@@ -1,36 +1,24 @@
-import { useToast } from "@chakra-ui/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  ErrorCode,
-  FileRejection,
+  DropzoneOptions,
   useDropzone as useReactDropzone,
 } from "react-dropzone";
+import { v4 as uuidv4 } from "uuid";
 
 type Props = {
-  acceptedFilesCallback?: (acceptedFiles: File[]) => void;
-  rejectedFilesCallback?: (fileRejections: FileRejection[]) => void;
-  shouldShowErrorToasts?: boolean;
   maxFileSizeMb?: number;
-};
+  onUploadError?: (error?: Error) => void;
+} & DropzoneOptions;
 
-type ErrorKey =
-  | ErrorCode.FileInvalidType
-  | ErrorCode.FileTooLarge
-  | ErrorCode.FileTooSmall
-  | ErrorCode.TooManyFiles;
-
-const errorTitles = {
-  [ErrorCode.FileInvalidType]: "Invalid file type",
-  [ErrorCode.FileTooLarge]: "File too large",
-  [ErrorCode.FileTooSmall]: "File too small",
-  [ErrorCode.TooManyFiles]: "Too many files",
-};
-
-const uploadImages = async (files: File[], id: number) => {
+const uploadImages = async (
+  files: File[],
+  fileIds: string[],
+  clientId: string
+): Promise<Record<string, string>> => {
   const formData = new FormData();
-  files.forEach((file, index) => formData.append(index.toString(), file));
+  files.forEach((file, index) => formData.append(fileIds[index], file));
 
-  const response = await fetch(`/api/upload-images/${id}`, {
+  const response = await fetch(`/api/upload-images/${clientId}`, {
     method: "POST",
     body: formData,
   });
@@ -40,17 +28,71 @@ const uploadImages = async (files: File[], id: number) => {
   else throw Error(body.message ?? "Failed to upload images");
 };
 
-const useDropzone = ({
-  shouldShowErrorToasts = true,
-  maxFileSizeMb = 10,
-}: Props = {}) => {
-  const toast = useToast();
-  const [previews, setPreviews] = useState<string[]>([]);
-  const [hashes, setHashes] = useState<string[]>([]);
+interface UploadedFile extends File {
+  progress: number;
+  preview: string;
+  hash?: string;
+}
+
+const useDropzone = (
+  {
+    onUploadError = () => {},
+    maxFileSizeMb = 10,
+    ...dropzoneOptions
+  }: Props = {
+    accept: "image/*",
+    noClick: true,
+  }
+) => {
   const [progressEventSource, setProgressEventSource] =
     useState<EventSource | null>(null);
-  const uploadProgressId = useRef<number>(+Date.now());
-  const [progresses, setProgresses] = useState<number[]>([]);
+  const uploadProgressId = useRef<string>(uuidv4());
+
+  const [uploadedFiles, setUploadedFiles] = useState<
+    Record<string, UploadedFile>
+  >({});
+
+  useEffect(() => () => progressEventSource?.close(), [progressEventSource]);
+
+  const dropzone = useReactDropzone({
+    ...dropzoneOptions,
+    onDrop: (acceptedFiles, fileRejections, event) => {
+      const newUploadedFiles = Object.fromEntries(
+        acceptedFiles.map((file) => [
+          uuidv4(),
+          {
+            ...file,
+            progress: 0,
+            preview: URL.createObjectURL(file),
+          },
+        ])
+      );
+
+      setUploadedFiles((prev) => ({
+        ...prev,
+        ...newUploadedFiles,
+      }));
+
+      uploadImages(
+        acceptedFiles,
+        Object.keys(newUploadedFiles),
+        uploadProgressId.current
+      )
+        .then((hashes) =>
+          setUploadedFiles((prev) => {
+            const newUploadedFiles = { ...prev };
+            Object.entries(hashes).forEach(
+              ([id, hash]) => (newUploadedFiles[id].hash = hash)
+            );
+            return newUploadedFiles;
+          })
+        )
+        .catch(onUploadError);
+
+      dropzoneOptions.onDrop?.(acceptedFiles, fileRejections, event);
+    },
+    maxSize: maxFileSizeMb * 1024 * 1024,
+  });
 
   useEffect(() => {
     setProgressEventSource(() => {
@@ -58,58 +100,21 @@ const useDropzone = ({
         `/api/upload-images/${uploadProgressId.current}`
       );
       source.addEventListener("message", (event) => {
-        const [index, progress] = JSON.parse(event.data);
-        setProgresses((prev) => {
-          const newProgresses = [...prev];
-          newProgresses[index] = progress;
-          return newProgresses;
-        });
+        const [id, progress] = JSON.parse(event.data);
+
+        setUploadedFiles((prev) => ({
+          ...prev,
+          [id]: {
+            ...prev[id],
+            progress,
+          },
+        }));
       });
       return source;
     });
   }, []);
 
-  useEffect(() => () => progressEventSource?.close(), [progressEventSource]);
-
-  const showErrorToasts = useCallback(
-    (fileRejections: FileRejection[]) => {
-      if (shouldShowErrorToasts) {
-        fileRejections.forEach((file) =>
-          file.errors.forEach(({ code, message }) =>
-            toast({
-              status: "error",
-              title: errorTitles[code as ErrorKey] ?? "Error",
-              description: message,
-            })
-          )
-        );
-      }
-    },
-    [shouldShowErrorToasts, toast]
-  );
-
-  const dropzone = useReactDropzone({
-    onDrop: (acceptedFiles, fileRejections) => {
-      setProgresses(acceptedFiles.map(() => 0));
-      setPreviews(acceptedFiles.map(URL.createObjectURL));
-      showErrorToasts(fileRejections);
-
-      uploadImages(acceptedFiles, uploadProgressId.current)
-        .then(setHashes)
-        .catch((error) =>
-          toast({
-            status: "error",
-            title: "Failed to upload",
-            description: error.message,
-          })
-        );
-    },
-    accept: "image/*",
-    noClick: true,
-    maxSize: maxFileSizeMb * 1024 * 1024,
-  });
-
-  return { ...dropzone, previews, hashes, progresses };
+  return { ...dropzone, uploadedFiles };
 };
 
 export default useDropzone;

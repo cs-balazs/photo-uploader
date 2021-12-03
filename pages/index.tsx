@@ -5,14 +5,8 @@ import UploadedImage from "../components/UploadedImage";
 import useDropzone from "../hooks/useDropzone";
 
 const Home: NextPage = () => {
-  const {
-    getRootProps,
-    getInputProps,
-    isDragActive,
-    previews,
-    progresses,
-    hashes,
-  } = useDropzone();
+  const { getRootProps, getInputProps, isDragActive, uploadedFiles } =
+    useDropzone();
 
   return (
     <Grid templateColumns="1fr 2fr" h="100vh" w="100vw">
@@ -23,12 +17,12 @@ const Home: NextPage = () => {
       />
 
       <Grid alignItems="center" templateColumns="repeat(4, 1fr)">
-        {previews.map((preview, index) => (
+        {Object.entries(uploadedFiles).map(([id, file]) => (
           <UploadedImage
-            key={preview}
-            preview={preview}
-            progress={progresses[index]}
-            hash={hashes[index]}
+            key={id}
+            preview={file.preview}
+            progress={file.progress}
+            hash={file.hash}
           />
         ))}
       </Grid>

@@ -31,14 +31,14 @@ type MulterFile = {
 type NextRequestWithFiles = NextApiRequest & { files: MulterFile[] };
 
 const uploadImage = (
-  id: string,
-  index: number,
+  clientId: string,
+  fileId: string,
   buffer: Buffer // TODO: Should allow string as well
 ): Promise<string> =>
   client
     .add(buffer, {
       progress: (bytes) =>
-        emitter.emit(`progress-${id}`, index, bytes / buffer.byteLength),
+        emitter.emit(`progress-${clientId}`, fileId, bytes / buffer.byteLength),
     })
     .then((added) => added.path);
 
@@ -53,8 +53,8 @@ handler.post(async (req: NextRequestWithFiles, res: NextApiResponse) => {
   const { id } = req.query;
 
   const hashes = await Promise.all(
-    req.files.map(({ buffer }, index) =>
-      uploadImage(id as string, index, buffer)
+    req.files.map(({ buffer, fieldname }) =>
+      uploadImage(id as string, fieldname, buffer)
     )
   ).catch(() => undefined);
 
@@ -63,7 +63,13 @@ handler.post(async (req: NextRequestWithFiles, res: NextApiResponse) => {
     return;
   }
 
-  res.status(200).json(hashes);
+  res
+    .status(200)
+    .json(
+      Object.fromEntries(
+        req.files.map(({ fieldname }, index) => [fieldname, hashes[index]])
+      )
+    );
 });
 
 handler.get((req: NextRequestWithFiles, res: NextApiResponse) => {

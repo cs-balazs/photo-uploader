@@ -5,7 +5,7 @@ import shortenHex from "../utils/shortenHex";
 type Props = {
   preview: string;
   progress: number;
-  hash: string;
+  hash?: string;
 };
 
 const UploadedImage = ({ preview, progress, hash }: Props) => (
