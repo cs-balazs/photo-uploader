@@ -30,8 +30,6 @@ const uploadImages = async (
     }
   );
 
-  console.log("response", response);
-
   const body = await response.json();
 
   if (response.ok) return body;
