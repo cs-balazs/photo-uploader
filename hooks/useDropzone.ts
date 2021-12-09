@@ -22,10 +22,16 @@ const uploadImages = async (
   const formData = new FormData();
   files.forEach((file, index) => formData.append(index.toString(), file));
 
-  const response = await fetch(`/api/upload-images/${clientId}`, {
-    method: "POST",
-    body: formData,
-  });
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_UPLOADER_API}/${clientId}`,
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  console.log("response", response);
+
   const body = await response.json();
 
   if (response.ok) return body;
@@ -70,7 +76,7 @@ const useDropzone = ({
   // Set up SSE client on mount
   useEffect(() => {
     const source = new EventSource(
-      `/api/upload-images/${uploadProgressId.current}`
+      `${process.env.NEXT_PUBLIC_UPLOADER_API}/${uploadProgressId.current}`
     );
     source.addEventListener("progress", (event) => {
       const [index, progress] = JSON.parse(
