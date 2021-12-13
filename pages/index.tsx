@@ -8,17 +8,23 @@ import useDropzone from "../hooks/useDropzone";
 const Home: NextPage = () => {
   const toast = useToast();
 
-  const { getRootProps, getInputProps, isDragActive, acceptedFiles } =
-    useDropzone({
-      onDrop: (_, fileRejections) =>
-        fileRejections.forEach((file) =>
-          toast({
-            status: "error",
-            title: "Upload failed",
-            description: `Failed to upload file ${file.file.name}`,
-          })
-        ),
-    });
+  const {
+    getRootProps,
+    getInputProps,
+    isDragActive,
+    acceptedFiles,
+    progresses,
+    hashes,
+  } = useDropzone({
+    onDrop: (_, fileRejections) =>
+      fileRejections.forEach((file) =>
+        toast({
+          status: "error",
+          title: "Upload failed",
+          description: `Failed to upload file ${file.file.name}`,
+        })
+      ),
+  });
 
   return (
     <Grid templateColumns="1fr 2fr" h="100vh" w="100vw">
@@ -29,12 +35,12 @@ const Home: NextPage = () => {
       />
 
       <Grid alignItems="center" templateColumns="repeat(4, 1fr)">
-        {Object.entries(acceptedFiles).map(([id, file]) => (
+        {acceptedFiles.map((file) => (
           <UploadedImage
-            key={id}
+            key={file.id}
             preview={file.preview}
-            progress={file.progress}
-            hash={file.hash}
+            progress={progresses[file.id]}
+            hash={hashes[file.id]}
           />
         ))}
       </Grid>
